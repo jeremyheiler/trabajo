@@ -1,6 +1,11 @@
 (ns trabajo.core
   (:require [redis.core :as redis]))
 
+; todo
+; - fn to kill and remove workers
+; - fn to replace dead workers
+; - job timeouts
+
 (def redis-conf (atom {:host "localhost" :port 6379}))
 
 (defmacro with-redis
@@ -31,25 +36,26 @@
 
 (def workers (ref {}))
 
-(defn ^:private init-future [queue]
-  (future
-    (loop []
-      (when-not (Thread/interrupted)
-        (if-let [job (dequeue queue)]
-          (apply-job job)
-          (Thread/sleep 5000))
-        (recur)))))
+(defn ^:private process [queue]
+  (loop []
+    (when-not (Thread/interrupted)
+      (if-let [job (dequeue queue)]
+        (apply-job job)
+        (Thread/sleep 5000))
+      (recur))))
 
 (defn work-on
-  "Returns a future that polls the given queue until cancelled."
+  "Returns a thread that polls the given queue until interrupted."
   [queue]
   (dosync
-    (let [f (init-future queue)]
-      (alter workers update-in [queue] #(conj (if (nil? %) [] %) f)))))
+    (let [t (Thread. #(process queue))]
+      (alter workers update-in [queue] #(conj (if (nil? %) [] %) t))
+      (.start t))))
 
 (defn test-work [x]
   (with-open [out (java.io.FileWriter. "/home/jeremy/job.out" true)]
     (.write out (str x "\n"))))
+
 
 ;(defn inc-workers [queue-key incr]
 ;  (dosync
