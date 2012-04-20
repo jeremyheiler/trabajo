@@ -2,6 +2,7 @@
   (:require [redis.core :as redis]))
 
 ; todo
+; - namespace redis keys with "trabajo"
 ; - fn to kill and remove workers
 ; - fn to replace dead workers
 ; - job timeouts
@@ -27,12 +28,29 @@
   [queue]
   (with-redis
     (when-let [id (redis/lpop (name queue))]
-      (redis/hgetall (str (name queue) ":" id)))))
+      (-> (redis/hgetall (str (name queue) ":" id))
+        (assoc :id id)
+        (assoc :queue queue)))))
+
+(defn ^:private store-error
+  "Stores the given error for the given job into Redis."
+  [job message]
+  (with-redis
+    (redis/rpush (str (name (:queue job) ) ":failed") (:id job))
+    (redis/set (str (name (:queue job)) ":" (:id job) ":error") message)))
 
 (defn apply-job
   "Applies the function from the job with its arguments."
   [{:strs [func args] :as job}]
   (apply (ns-resolve *ns* (symbol func)) (read-string args)))
+
+(defn process-job
+  "Processes the job and handles any errors."
+  [job]
+  (try
+    (apply-job job)
+    (catch Exception e
+      (store-error job (.toString e)))))
 
 (def workers (ref {}))
 
@@ -40,7 +58,7 @@
   (loop []
     (when-not (Thread/interrupted)
       (if-let [job (dequeue queue)]
-        (apply-job job)
+        (process-job job)
         (Thread/sleep 5000))
       (recur))))
 
