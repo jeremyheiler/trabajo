@@ -7,7 +7,7 @@ Trabajo is a Redis-backed library for creating background jobs with Clojure.
 The two main functions you need to know are `enqueue` and `work-on`.
 
     (trabajo.core/enqueue :my-queue 'clojure.core/inc [41])
-    (trabajo.core/work-on :my-queue)
+    (trabajo.core/start :my-queue)
 
 ### Redis
 
@@ -25,12 +25,8 @@ Here is an example with two worker threads, a quick job, and a time consuming jo
     1
     user=> (trabajo.core/enqueue :b 'trabajo.core/test-work ["Quicky."])
     2
-    user=> (trabajo.core/work-on :b)
+    user=> (trabajo.core/start :b)
     nil
-    user=> (trabajo.core/work-on :b)
-    nil
-    user=> @trabajo.core/workers
-    {:b [#<Thread Thread[Thread-8,5,main]> #<Thread Thread[Thread-9,5,main]>]}
 
 The contents of `job.out` will be:
 
