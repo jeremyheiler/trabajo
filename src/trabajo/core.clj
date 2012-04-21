@@ -112,13 +112,24 @@
             (recur (if (nil? qs) queues qs) p)))
         (recur q+qs (request-promise-from-work-manager))))))
 
+(defn running?
+  "Returns true if the work-manager thread is running, otherwise false."
+  []
+  (dosync
+    (if-let [t (:thread @work-manager)]
+      (.isAlive? t)
+      false)))
+
 (defn start
   "Starts a work manager that polls jobs on the given queue."
   [n & queues]
   (dosync
     (if-not (running?)
       (let [t (Thread. #(process queues))]
-        (alter work-manager assoc :thread t :max-workers n)
+        (ref-set work-manager
+          {:thread t
+           :promises (clojure.lang.PersistentQueue/EMPTY)
+           :max-workers n})
         (.start t))
       (throw (IllegalStateException. "A work manager has already been started.")))))
 
@@ -128,12 +139,4 @@
   (dosync
     (when-let [t (:thread @work-manager)]
       (.interrupt t))))
-
-(defn running?
-  "Returns true if the work-manager thread is running, otherwise false."
-  []
-  (dosync
-    (if-let [t (:thread @work-manager)]
-      (.isAlive? t)
-      false)))
 
