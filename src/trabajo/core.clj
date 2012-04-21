@@ -3,8 +3,6 @@
 
 ; todo
 ; - namespace redis keys with "trabajo"
-; - fn to kill and remove workers
-; - fn to replace dead workers
 ; - job timeouts
 
 (def redis-conf (atom {:host "localhost" :port 6379}))
@@ -118,7 +116,7 @@
   "Starts a work manager that polls jobs on the given queue."
   [n & queues]
   (dosync
-    (if (nil? (:thread @work-manager))
+    (if-not (running?)
       (let [t (Thread. #(process queues))]
         (alter work-manager assoc :thread t :max-workers n)
         (.start t))
@@ -128,6 +126,14 @@
   "Stops the work manager if one has been started."
   []
   (dosync
-    (when-not (nil? (:thread @work-manager))
-      (.interrupt @work-manager))))
+    (when-let [t (:thread @work-manager)]
+      (.interrupt t))))
+
+(defn running?
+  "Returns true if the work-manager thread is running, otherwise false."
+  []
+  (dosync
+    (if-let [t (:thread @work-manager)]
+      (.isAlive? t)
+      false)))
 
